@@ -155,7 +155,7 @@
 
 <script>
   // ⚠️ YAHA APNA RENDER BACKEND URL DAALO deploy ke baad:
-  const BACKEND_URL = "https://agentic-bot-backend.onrender.com"; // <-- ise replace kar
+  const BACKEND_URL = "https://tera-backend.onrender.com"; // <-- ise replace kar
 
   const sendBtn = document.getElementById('sendBtn');
   const statusMsg = document.getElementById('statusMsg');
@@ -208,7 +208,13 @@
         result.classList.add('show');
       }
     } catch (err) {
-      errorBox.textContent = 'Network error: ' + err.message;
+      // "Failed to fetch" aksar Render free-tier cold-start ki wajah se hota hai —
+      // pehli request server ko jagati hai (~50s), lekin fetch usse pehle hi
+      // giv up kar deta hai. User ko ye batana zaroori hai warna lagega bug hai.
+      const isColdStartLikely = err.message.toLowerCase().includes('fetch');
+      errorBox.textContent = isColdStartLikely
+        ? 'Network error: Failed to fetch. Agar backend Render pe free tier hai aur abhi tak koi request nahi gayi thi, to server "so raha" ho sakta hai — 30-60 sec baad dobara try karo.'
+        : 'Network error: ' + err.message;
       errorBox.classList.add('show');
     } finally {
       sendBtn.disabled = false;
