@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Agentic Bot — Project Pipeline</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
 <style>
   :root {
     --bg: #0b0d12;
@@ -88,9 +89,6 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 14px;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    white-space: pre-wrap;
     margin-bottom: 16px;
   }
   .file-card {
@@ -116,7 +114,7 @@
     padding: 0 14px 14px;
   }
   .file-code.open { display: block; }
-  pre {
+  #fullLog {
     white-space: pre-wrap;
     word-break: break-word;
     background: #0b0d12;
@@ -230,6 +228,158 @@
     flex-direction: column;
     gap: 6px;
   }
+
+  /* ---------- Upload area ---------- */
+  .upload-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .upload-btn:active { border-color: var(--accent); color: var(--accent); }
+  input[type="file"] { display: none; }
+  .attached-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .attached-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 4px 10px 4px 12px;
+    font-size: 0.74rem;
+    font-family: monospace;
+  }
+  .attached-chip button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0.7;
+  }
+  .attached-chip button:active { opacity: 1; }
+
+  /* ---------- Result header / actions ---------- */
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .action-btn:active { border-color: var(--accent); color: var(--accent); }
+  .action-btn.primary {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .action-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  /* ---------- Markdown report ---------- */
+  .report {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: normal;
+  }
+  .report h1, .report h2, .report h3 {
+    color: var(--text);
+    margin: 14px 0 6px;
+    line-height: 1.3;
+  }
+  .report h1:first-child, .report h2:first-child, .report h3:first-child { margin-top: 0; }
+  .report h1 { font-size: 1.1rem; }
+  .report h2 { font-size: 1rem; }
+  .report h3 { font-size: 0.92rem; color: var(--accent); }
+  .report p { margin: 8px 0; }
+  .report ul, .report ol { margin: 8px 0; padding-left: 20px; }
+  .report li { margin: 3px 0; }
+  .report strong { color: var(--accent); }
+  .report code {
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.82em;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+  .report pre {
+    margin: 10px 0;
+  }
+  .report pre code {
+    border: none;
+    padding: 0;
+    background: none;
+  }
+  .report hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* ---------- Code blocks (Prism override) ---------- */
+  pre[class*="language-"] {
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    margin: 0;
+    background: #0d1017 !important;
+  }
+  code[class*="language-"] { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+
+  .file-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 8px 14px 0;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+  }
+  .icon-btn:active { color: var(--accent); border-color: var(--accent); }
+  .icon-btn svg { width: 11px; height: 11px; }
 </style>
 </head>
 <body>
@@ -237,6 +387,14 @@
   <p class="sub">Planner → Coder → Test → Fixer → Reporter, multiple files, ek call mein.</p>
 
   <textarea id="task">Ek simple todo app banao HTML, CSS aur vanilla JavaScript mein. LocalStorage use karo data save karne ke liye.</textarea>
+
+  <div class="upload-row">
+    <label class="upload-btn" for="fileUpload">
+      📎 File attach karo (reference ke liye)
+    </label>
+    <input type="file" id="fileUpload" multiple accept=".js,.ts,.py,.html,.css,.json,.txt,.md,.jsx,.tsx,.java,.go,.rb,.php,.sh" />
+  </div>
+  <div class="attached-files" id="attachedFiles"></div>
 
   <button class="send" id="sendBtn">Banao</button>
 
@@ -253,7 +411,13 @@
   <div class="error-box" id="errorBox"></div>
 
   <div class="result" id="result">
-    <span class="badge" id="badge"></span>
+    <div class="result-header">
+      <span class="badge" id="badge"></span>
+      <button class="action-btn primary" id="downloadAllBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Sab files ZIP mein download karo
+      </button>
+    </div>
     <div class="report" id="report"></div>
     <div id="fileList"></div>
     <details class="log-details">
@@ -262,7 +426,16 @@
     </details>
   </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
+  // Prism autoloader ko batao language grammar files kahan se laayein
+  if (window.Prism) {
+    Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/';
+  }
+
   // ⚠️ YAHA APNA RENDER BACKEND URL DAALO deploy ke baad:
   const BACKEND_URL = "https://agentic-bot-backend.onrender.com";
 
@@ -282,6 +455,104 @@
   const tracker = document.getElementById('tracker');
   const trackerHeadline = document.getElementById('trackerHeadline');
   const trackerElapsed = document.getElementById('trackerElapsed');
+  const fileUploadInput = document.getElementById('fileUpload');
+  const attachedFilesEl = document.getElementById('attachedFiles');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+  // ---------- File upload (reference files) ----------
+  // Ye files server nahi jaati as files — inka content task prompt ke
+  // saath text ke roop mein bhej dete hain, taaki Planner/Coder reference
+  // ke tor pe dekh sakein (jaise "is existing config jaisa banao").
+  let attachedFiles = []; // { name, content }
+  let lastResultData = null; // download-all ZIP button ke liye
+
+  fileUploadInput.addEventListener('change', async () => {
+    const newFiles = Array.from(fileUploadInput.files || []);
+    for (const f of newFiles) {
+      if (f.size > 200 * 1024) {
+        alert(`${f.name} bahut badi hai (200KB se zyada) — skip kar diya.`);
+        continue;
+      }
+      const content = await f.text();
+      attachedFiles.push({ name: f.name, content });
+    }
+    fileUploadInput.value = ''; // reset taaki same file dobara select ho sake
+    renderAttachedFiles();
+  });
+
+  function renderAttachedFiles() {
+    attachedFilesEl.innerHTML = attachedFiles.map((f, i) => `
+      <span class="attached-chip">
+        ${escapeHtml(f.name)}
+        <button type="button" data-idx="${i}" aria-label="Remove ${escapeHtml(f.name)}">×</button>
+      </span>
+    `).join('');
+    attachedFilesEl.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        attachedFiles.splice(parseInt(btn.dataset.idx, 10), 1);
+        renderAttachedFiles();
+      });
+    });
+  }
+
+  function buildTaskWithAttachments(task) {
+    if (attachedFiles.length === 0) return task;
+    const contextBlock = attachedFiles
+      .map(f => `--- ${f.name} ---\n${f.content}`)
+      .join('\n\n');
+    return `${task}\n\nReference ke liye attach ki gayi files (inhe dekh ke context lo, zaroorat ho to inse related code likho):\n${contextBlock}`;
+  }
+
+  // ---------- File extension -> Prism language ----------
+  const EXT_TO_PRISM_LANG = {
+    js: 'javascript', mjs: 'javascript', jsx: 'jsx',
+    ts: 'typescript', tsx: 'tsx',
+    py: 'python', html: 'markup', htm: 'markup', xml: 'markup',
+    css: 'css', json: 'json', md: 'markdown',
+    rb: 'ruby', go: 'go', java: 'java', rs: 'rust',
+    sh: 'bash', bash: 'bash', php: 'php', yml: 'yaml', yaml: 'yaml',
+  };
+  function langForFile(path) {
+    const ext = path.split('.').pop().toLowerCase();
+    return EXT_TO_PRISM_LANG[ext] || 'markup';
+  }
+
+  // ---------- Copy / download helpers ----------
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.innerHTML;
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.innerHTML = original; }, 1500);
+    }).catch(() => {
+      alert('Copy nahi ho paya — browser permission check karo.');
+    });
+  }
+
+  function downloadSingleFile(path, content) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = path.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadAllAsZip(files, taskLabel) {
+    const zip = new JSZip();
+    files.forEach(f => zip.file(f.path, f.code));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `project-${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
   const stepList = document.getElementById('stepList');
 
   // ---------- Step model ----------
@@ -485,8 +756,9 @@
   }
 
   sendBtn.addEventListener('click', async () => {
-    const task = document.getElementById('task').value.trim();
-    if (!task) return;
+    const rawTask = document.getElementById('task').value.trim();
+    if (!rawTask) return;
+    const task = buildTaskWithAttachments(rawTask);
 
     sendBtn.disabled = true;
     sendBtn.textContent = 'Ban raha hai...';
@@ -542,21 +814,56 @@
       if (!finalData) throw new Error('Server se result nahi mila');
 
       const data = finalData;
+      lastResultData = data; // download-all button ke liye
       badge.textContent = data.success ? '✅ SUCCESS' : '⚠️ KUCH FILES FAILED';
       badge.className = 'badge ' + (data.success ? 'success' : 'fail');
-      report.textContent = data.report || '(no report)';
+
+      // Reporter ka summary markdown hai — render karo, phir uske andar ke
+      // code blocks (agar hon) Prism se highlight karo.
+      report.innerHTML = marked.parse(data.report || '(no report)');
+      if (window.Prism) Prism.highlightAllUnder(report);
 
       fileList.innerHTML = data.files.map((f, i) => `
         <div class="file-card">
           <div class="file-header" onclick="document.getElementById('code-${i}').classList.toggle('open')">
-            <span class="file-name">${f.path}</span>
+            <span class="file-name">${escapeHtml(f.path)}</span>
             <span class="file-status ${f.success ? 'ok' : 'fail'}">${f.success ? '✓ OK' : '✗ FAILED'}</span>
           </div>
           <div class="file-code" id="code-${i}">
-            <pre>${f.code.replace(/</g, '&lt;')}</pre>
+            <div class="file-toolbar">
+              <button type="button" class="icon-btn copy-btn" data-idx="${i}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+              <button type="button" class="icon-btn dl-btn" data-idx="${i}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download
+              </button>
+            </div>
+            <pre class="language-${langForFile(f.path)}"><code class="language-${langForFile(f.path)}">${escapeHtml(f.code)}</code></pre>
           </div>
         </div>
       `).join('');
+
+      // Prism ko naye code blocks highlight karne ko bolo
+      if (window.Prism) Prism.highlightAllUnder(fileList);
+
+      // Copy/download button listeners (event delegation ki jagah direct —
+      // list chhoti hai, 6 files max)
+      fileList.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const i = parseInt(btn.dataset.idx, 10);
+          copyText(data.files[i].code, btn);
+        });
+      });
+      fileList.querySelectorAll('.dl-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const i = parseInt(btn.dataset.idx, 10);
+          downloadSingleFile(data.files[i].path, data.files[i].code);
+        });
+      });
 
       fullLog.textContent = JSON.stringify(data.log, null, 2);
       result.classList.add('show');
@@ -572,6 +879,11 @@
       sendBtn.textContent = 'Banao';
       statusMsg.classList.remove('show');
     }
+  });
+
+  downloadAllBtn.addEventListener('click', () => {
+    if (!lastResultData || !lastResultData.files || lastResultData.files.length === 0) return;
+    downloadAllAsZip(lastResultData.files);
   });
 </script>
 </body>
