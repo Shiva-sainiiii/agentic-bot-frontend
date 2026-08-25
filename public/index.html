@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Agentic Bot — Project Pipeline</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #14171f;
+    --border: #262a35;
+    --text: #eceef2;
+    --muted: #8b90a0;
+    --accent: #7dd3c0;
+    --accent-dim: #1a3a35;
+    --danger: #ff8a8a;
+    --danger-bg: #2a1515;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 16px;
+    padding-bottom: 40px;
+  }
+  h1 { font-size: 1.25rem; margin: 4px 0 2px; }
+  p.sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px; }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    padding: 14px;
+    font-size: 1rem;
+    resize: vertical;
+    font-family: inherit;
+  }
+  textarea:focus { outline: 1px solid var(--accent); }
+  button.send {
+    width: 100%;
+    margin-top: 12px;
+    background: var(--accent);
+    color: #0b0d12;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  button.send:disabled { opacity: 0.5; }
+  .status {
+    margin-top: 14px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: none;
+  }
+  .status.show { display: block; }
+  .error-box {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border: 1px solid #4a1f1f;
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 16px;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    display: none;
+  }
+  .error-box.show { display: block; }
+  .result { margin-top: 18px; display: none; }
+  .result.show { display: block; }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .badge.success { background: var(--accent-dim); color: var(--accent); }
+  .badge.fail { background: var(--danger-bg); color: var(--danger); }
+  .report {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    margin-bottom: 16px;
+  }
+  .file-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+  .file-name { font-family: monospace; font-size: 0.88rem; }
+  .file-status { font-size: 0.75rem; font-weight: 700; }
+  .file-status.ok { color: var(--accent); }
+  .file-status.fail { color: var(--danger); }
+  .file-code {
+    display: none;
+    padding: 0 14px 14px;
+  }
+  .file-code.open { display: block; }
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+  details.log-details { margin-top: 16px; }
+  details.log-details summary { color: var(--muted); font-size: 0.82rem; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>🏗️ Project Pipeline</h1>
+  <p class="sub">Planner → Coder → Test → Fixer → Reporter, multiple files, ek call mein.</p>
+
+  <textarea id="task">Ek simple todo app banao HTML, CSS aur vanilla JavaScript mein. LocalStorage use karo data save karne ke liye.</textarea>
+
+  <button class="send" id="sendBtn">Banao</button>
+
+  <div class="status" id="statusMsg">⏳ Planner plan bana raha hai, phir har file ke liye code likha/test/fix ho raha hai... ye 1-3 minute le sakta hai, depend karta hai kitni files hain.</div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="result" id="result">
+    <span class="badge" id="badge"></span>
+    <div class="report" id="report"></div>
+    <div id="fileList"></div>
+    <details class="log-details">
+      <summary>Full log dekho</summary>
+      <pre id="fullLog"></pre>
+    </details>
+  </div>
+
+<script>
+  // ⚠️ YAHA APNA RENDER BACKEND URL DAALO deploy ke baad:
+  const BACKEND_URL = "https://tera-backend.onrender.com"; // <-- ise replace kar
+
+  const sendBtn = document.getElementById('sendBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const errorBox = document.getElementById('errorBox');
+  const result = document.getElementById('result');
+  const badge = document.getElementById('badge');
+  const report = document.getElementById('report');
+  const fileList = document.getElementById('fileList');
+  const fullLog = document.getElementById('fullLog');
+
+  sendBtn.addEventListener('click', async () => {
+    const task = document.getElementById('task').value.trim();
+    if (!task) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Ban raha hai...';
+    statusMsg.classList.add('show');
+    errorBox.classList.remove('show');
+    result.classList.remove('show');
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errorBox.textContent = data.error || 'Kuch gadbad hui';
+        errorBox.classList.add('show');
+      } else {
+        badge.textContent = data.success ? '✅ SUCCESS' : '⚠️ KUCH FILES FAILED';
+        badge.className = 'badge ' + (data.success ? 'success' : 'fail');
+        report.textContent = data.report || '(no report)';
+
+        fileList.innerHTML = data.files.map((f, i) => `
+          <div class="file-card">
+            <div class="file-header" onclick="document.getElementById('code-${i}').classList.toggle('open')">
+              <span class="file-name">${f.path}</span>
+              <span class="file-status ${f.success ? 'ok' : 'fail'}">${f.success ? '✓ OK' : '✗ FAILED'}</span>
+            </div>
+            <div class="file-code" id="code-${i}">
+              <pre>${f.code.replace(/</g, '&lt;')}</pre>
+            </div>
+          </div>
+        `).join('');
+
+        fullLog.textContent = JSON.stringify(data.log, null, 2);
+        result.classList.add('show');
+      }
+    } catch (err) {
+      errorBox.textContent = 'Network error: ' + err.message;
+      errorBox.classList.add('show');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Banao';
+      statusMsg.classList.remove('show');
+    }
+  });
+</script>
+</body>
+</html>
