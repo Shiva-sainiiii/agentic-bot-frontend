@@ -129,6 +129,107 @@
   }
   details.log-details { margin-top: 16px; }
   details.log-details summary { color: var(--muted); font-size: 0.82rem; cursor: pointer; }
+
+  /* ---------- Progress tracker ---------- */
+  .tracker {
+    margin-top: 16px;
+    display: none;
+  }
+  .tracker.show { display: block; }
+  .tracker-overall {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .tracker-overall .elapsed { font-variant-numeric: tabular-nums; }
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .step .icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    margin-top: 1px;
+  }
+  .step .body { flex: 1; min-width: 0; }
+  .step .label {
+    font-size: 0.86rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .step .label .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step .sub {
+    font-size: 0.74rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .step .step-elapsed {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* pending: dim/greyed */
+  .step.pending { opacity: 0.45; }
+  .step.pending .icon { color: var(--muted); }
+
+  /* running: accent border + pulse dot */
+  .step.running { border-color: var(--accent); background: var(--accent-dim); }
+  .step.running .label { color: var(--accent); }
+  .step.running .icon .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+
+  /* stuck: running too long — turns amber + stronger pulse, explicit warning text */
+  .step.stuck { border-color: #e0b34d; background: #2a2410; }
+  .step.stuck .label { color: #e0b34d; }
+  .step.stuck .icon .dot { background: #e0b34d; animation: pulse 0.6s ease-in-out infinite; }
+  .step.stuck .sub { color: #e0b34d; }
+
+  /* done */
+  .step.done { border-color: var(--border); }
+  .step.done .icon { color: var(--accent); }
+
+  /* failed */
+  .step.failed { border-color: #4a1f1f; background: var(--danger-bg); }
+  .step.failed .label { color: var(--danger); }
+  .step.failed .icon { color: var(--danger); }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; }
+  }
+
+  .file-step-group {
+    margin-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 </style>
 </head>
 <body>
@@ -140,6 +241,14 @@
   <button class="send" id="sendBtn">Banao</button>
 
   <div class="status" id="statusMsg">⏳ Planner plan bana raha hai, phir har file ke liye code likha/test/fix ho raha hai... ye 1-3 minute le sakta hai, depend karta hai kitni files hain.</div>
+
+  <div class="tracker" id="tracker">
+    <div class="tracker-overall">
+      <span id="trackerHeadline">Shuru ho raha hai…</span>
+      <span class="elapsed" id="trackerElapsed">0s</span>
+    </div>
+    <div class="step-list" id="stepList"></div>
+  </div>
 
   <div class="error-box" id="errorBox"></div>
 
@@ -157,6 +266,11 @@
   // ⚠️ YAHA APNA RENDER BACKEND URL DAALO deploy ke baad:
   const BACKEND_URL = "https://agentic-bot-backend.onrender.com";
 
+  // Kitni der koi naya event na aaye to step ko "stuck" maan lo (UI hint hai,
+  // hard-fail nahi — request abhi bhi chal rahi ho sakti hai).
+  const STUCK_AFTER_MS = 25000;
+  const STUCK_CHECK_INTERVAL_MS = 1000;
+
   const sendBtn = document.getElementById('sendBtn');
   const statusMsg = document.getElementById('statusMsg');
   const errorBox = document.getElementById('errorBox');
@@ -165,6 +279,206 @@
   const report = document.getElementById('report');
   const fileList = document.getElementById('fileList');
   const fullLog = document.getElementById('fullLog');
+  const tracker = document.getElementById('tracker');
+  const trackerHeadline = document.getElementById('trackerHeadline');
+  const trackerElapsed = document.getElementById('trackerElapsed');
+  const stepList = document.getElementById('stepList');
+
+  // ---------- Step model ----------
+  // Ek "step" = { id, label, status: pending|running|done|failed, sub, startedAt, lastEventAt }
+  // Top-level steps: planner, sandbox, per-file(coder+test+fixer collapsed into one row per file), reporter
+  let steps = [];
+  let stepById = {};
+  let overallStartTime = null;
+  let timerHandle = null;
+  let lastEventTime = null;
+
+  function fmtElapsed(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}m ${rem}s`;
+  }
+
+  function resetTracker(fileCount) {
+    steps = [
+      { id: 'planner', label: 'Planner', sub: 'Files ki list bana raha hai', status: 'pending' },
+      { id: 'sandbox', label: 'Sandbox', sub: 'Isolated environment taiyar ho raha hai', status: 'pending' },
+      // files baad me planner-done event ke baad add honge (tab tak count pata nahi)
+      { id: 'reporter', label: 'Reporter', sub: 'Final summary likh raha hai', status: 'pending' },
+    ];
+    stepById = Object.fromEntries(steps.map(s => [s.id, s]));
+    overallStartTime = Date.now();
+    lastEventTime = Date.now();
+    renderTracker();
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = setInterval(tick, STUCK_CHECK_INTERVAL_MS);
+  }
+
+  function insertFileSteps(filePaths) {
+    const fileSteps = filePaths.map((path, i) => ({
+      id: `file:${path}`,
+      label: path,
+      sub: 'Queue mein',
+      status: 'pending',
+      isFile: true,
+      fileIndex: i,
+    }));
+    // reporter se pehle insert karo
+    const reporterIdx = steps.findIndex(s => s.id === 'reporter');
+    steps.splice(reporterIdx, 0, ...fileSteps);
+    fileSteps.forEach(s => stepById[s.id] = s);
+    renderTracker();
+  }
+
+  function setStep(id, patch) {
+    const s = stepById[id];
+    if (!s) return;
+    Object.assign(s, patch);
+    if (patch.status === 'running') s.startedAt = Date.now();
+    lastEventTime = Date.now();
+    renderTracker();
+  }
+
+  function tick() {
+    if (!overallStartTime) return;
+    trackerElapsed.textContent = fmtElapsed(Date.now() - overallStartTime);
+
+    // Agar koi step "running" hai aur der se koi event nahi aaya, use "stuck" dikhao
+    const now = Date.now();
+    let changed = false;
+    for (const s of steps) {
+      if (s.status === 'running') {
+        const stuckNow = (now - lastEventTime) > STUCK_AFTER_MS;
+        if (stuckNow && !s._stuckFlag) { s._stuckFlag = true; changed = true; }
+        if (!stuckNow && s._stuckFlag) { s._stuckFlag = false; changed = true; }
+      }
+    }
+    if (changed) renderTracker();
+    else renderElapsedOnly();
+  }
+
+  function renderElapsedOnly() {
+    // per-step elapsed timers update karo bina pura re-render kiye (perf ke liye)
+    steps.forEach(s => {
+      if (s.status === 'running' && s.startedAt) {
+        const el = document.getElementById(`elapsed-${cssId(s.id)}`);
+        if (el) el.textContent = fmtElapsed(Date.now() - s.startedAt);
+      }
+    });
+  }
+
+  function cssId(id) {
+    return id.replace(/[^a-zA-Z0-9]/g, '_');
+  }
+
+  function iconFor(status) {
+    if (status === 'done') return '✓';
+    if (status === 'failed') return '✗';
+    if (status === 'running') return '<span class="dot"></span>';
+    return '○';
+  }
+
+  function renderTracker() {
+    const runningStep = steps.find(s => s.status === 'running');
+    if (runningStep) {
+      trackerHeadline.textContent = runningStep._stuckFlag
+        ? `⚠️ "${runningStep.label}" me time lag raha hai — atka ho sakta hai...`
+        : `Chal raha hai: ${runningStep.label}`;
+    } else if (steps.every(s => s.status === 'done')) {
+      trackerHeadline.textContent = '✅ Poora ho gaya';
+    } else if (steps.some(s => s.status === 'failed')) {
+      trackerHeadline.textContent = '⚠️ Kuch step fail hua';
+    } else {
+      trackerHeadline.textContent = 'Shuru ho raha hai…';
+    }
+
+    stepList.innerHTML = steps.map(s => {
+      const cls = ['step', s.status];
+      if (s.status === 'running' && s._stuckFlag) cls.push('stuck');
+      const elapsedSpan = s.status === 'running'
+        ? `<span class="step-elapsed" id="elapsed-${cssId(s.id)}">${s.startedAt ? fmtElapsed(Date.now() - s.startedAt) : ''}</span>`
+        : '';
+      const subText = (s.status === 'running' && s._stuckFlag)
+        ? 'Response aane mein normal se zyada time lag raha hai — ho sakta hai chal raha ho, ho sakta hai atka ho.'
+        : (s.sub || '');
+      return `
+        <div class="${cls.join(' ')}">
+          <div class="icon">${iconFor(s.status)}</div>
+          <div class="body">
+            <div class="label"><span class="name">${escapeHtml(s.label)}</span>${elapsedSpan}</div>
+            <div class="sub">${escapeHtml(subText)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  // ---------- SSE event -> step state mapping ----------
+  function handleProgressEvent(ev) {
+    switch (ev.type) {
+      case 'planner-start':
+        setStep('planner', { status: 'running' });
+        break;
+      case 'planner-done':
+        if (ev.ok === false) {
+          setStep('planner', { status: 'failed', sub: ev.error || 'Plan parse nahi hua' });
+        } else {
+          setStep('planner', { status: 'done', sub: `${ev.files.length} file(s) plan hui` });
+          insertFileSteps(ev.files);
+        }
+        break;
+      case 'sandbox-start':
+        setStep('sandbox', { status: 'running' });
+        break;
+      case 'sandbox-done':
+        setStep('sandbox', { status: 'done', sub: 'Ready' });
+        break;
+      case 'file-start':
+        setStep(`file:${ev.file}`, { status: 'running', sub: `Coder likh raha hai (file ${ev.index + 1}/${ev.total})` });
+        break;
+      case 'coder-start':
+        setStep(`file:${ev.file}`, { status: 'running', sub: 'Coder likh raha hai...' });
+        break;
+      case 'coder-done':
+        setStep(`file:${ev.file}`, { sub: 'Code likha gaya, ab test ho raha hai...' });
+        break;
+      case 'test-start':
+        setStep(`file:${ev.file}`, { sub: ev.attempt > 0 ? `Dobara test ho raha hai (attempt ${ev.attempt})...` : 'Test ho raha hai...' });
+        break;
+      case 'test-done':
+        setStep(`file:${ev.file}`, { sub: ev.ok ? 'Test pass ✓' : 'Test fail — fix karne ki koshish ho rahi hai...' });
+        break;
+      case 'fixer-start':
+        setStep(`file:${ev.file}`, { status: 'running', sub: `Fixer bug theek kar raha hai (attempt ${ev.attempt}/${ev.maxAttempts})...` });
+        break;
+      case 'fixer-done':
+        setStep(`file:${ev.file}`, { sub: 'Fix ho gaya, dobara test ho raha hai...' });
+        break;
+      case 'file-done':
+        setStep(`file:${ev.file}`, {
+          status: ev.ok ? 'done' : 'failed',
+          sub: ev.ok ? 'Ban gaya ✓' : 'Test pass nahi hua (max attempts khatam)',
+        });
+        break;
+      case 'reporter-start':
+        setStep('reporter', { status: 'running' });
+        break;
+      case 'reporter-done':
+        setStep('reporter', { status: 'done', sub: 'Summary taiyar' });
+        break;
+      case 'pipeline-error':
+        // jo bhi step abhi running tha usko failed maro
+        const running = steps.find(s => s.status === 'running');
+        if (running) setStep(running.id, { status: 'failed', sub: ev.error });
+        break;
+    }
+  }
 
   sendBtn.addEventListener('click', async () => {
     const task = document.getElementById('task').value.trim();
@@ -175,48 +489,83 @@
     statusMsg.classList.add('show');
     errorBox.classList.remove('show');
     result.classList.remove('show');
+    tracker.classList.add('show');
+    resetTracker();
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/project`, {
+      const res = await fetch(`${BACKEND_URL}/api/project/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task })
       });
-      const data = await res.json();
 
-      if (!res.ok) {
-        errorBox.textContent = data.error || 'Kuch gadbad hui';
-        errorBox.classList.add('show');
-      } else {
-        badge.textContent = data.success ? '✅ SUCCESS' : '⚠️ KUCH FILES FAILED';
-        badge.className = 'badge ' + (data.success ? 'success' : 'fail');
-        report.textContent = data.report || '(no report)';
-
-        fileList.innerHTML = data.files.map((f, i) => `
-          <div class="file-card">
-            <div class="file-header" onclick="document.getElementById('code-${i}').classList.toggle('open')">
-              <span class="file-name">${f.path}</span>
-              <span class="file-status ${f.success ? 'ok' : 'fail'}">${f.success ? '✓ OK' : '✗ FAILED'}</span>
-            </div>
-            <div class="file-code" id="code-${i}">
-              <pre>${f.code.replace(/</g, '&lt;')}</pre>
-            </div>
-          </div>
-        `).join('');
-
-        fullLog.textContent = JSON.stringify(data.log, null, 2);
-        result.classList.add('show');
+      if (!res.ok || !res.body) {
+        // stream endpoint khud fail hua (missing key waghera) — normal JSON error hoga
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        throw new Error(data.error || `Server error (${res.status})`);
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+      let streamError = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE frames \n\n se separate hote hain
+        let sepIdx;
+        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+          const dataLine = frame.split('\n').find(l => l.startsWith('data: '));
+          if (!dataLine) continue; // ping/comment frame, ignore
+
+          const payload = JSON.parse(dataLine.slice(6));
+          if (payload.kind === 'progress') {
+            handleProgressEvent(payload);
+          } else if (payload.kind === 'result') {
+            finalData = payload;
+          } else if (payload.kind === 'error') {
+            streamError = payload.error;
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!finalData) throw new Error('Server se result nahi mila (connection beech mein toot gaya ho sakta hai)');
+
+      const data = finalData;
+      badge.textContent = data.success ? '✅ SUCCESS' : '⚠️ KUCH FILES FAILED';
+      badge.className = 'badge ' + (data.success ? 'success' : 'fail');
+      report.textContent = data.report || '(no report)';
+
+      fileList.innerHTML = data.files.map((f, i) => `
+        <div class="file-card">
+          <div class="file-header" onclick="document.getElementById('code-${i}').classList.toggle('open')">
+            <span class="file-name">${f.path}</span>
+            <span class="file-status ${f.success ? 'ok' : 'fail'}">${f.success ? '✓ OK' : '✗ FAILED'}</span>
+          </div>
+          <div class="file-code" id="code-${i}">
+            <pre>${f.code.replace(/</g, '&lt;')}</pre>
+          </div>
+        </div>
+      `).join('');
+
+      fullLog.textContent = JSON.stringify(data.log, null, 2);
+      result.classList.add('show');
     } catch (err) {
-      // "Failed to fetch" aksar Render free-tier cold-start ki wajah se hota hai —
-      // pehli request server ko jagati hai (~50s), lekin fetch usse pehle hi
-      // giv up kar deta hai. User ko ye batana zaroori hai warna lagega bug hai.
       const isColdStartLikely = err.message.toLowerCase().includes('fetch');
       errorBox.textContent = isColdStartLikely
         ? 'Network error: Failed to fetch. Agar backend Render pe free tier hai aur abhi tak koi request nahi gayi thi, to server "so raha" ho sakta hai — 30-60 sec baad dobara try karo.'
-        : 'Network error: ' + err.message;
+        : 'Error: ' + err.message;
       errorBox.classList.add('show');
     } finally {
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       sendBtn.disabled = false;
       sendBtn.textContent = 'Banao';
       statusMsg.classList.remove('show');
