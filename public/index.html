@@ -328,6 +328,43 @@
   }
   @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
+  .step .plan-tap {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.66rem; color: var(--muted);
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    padding: 3px 8px; border-radius: 999px;
+    font-family: var(--font-mono);
+    margin-top: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .step .plan-tap:active { border-color: var(--accent); color: var(--accent-2); }
+
+  .plan-panel {
+    margin-top: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: none;
+  }
+  .plan-panel.open { display: block; }
+  .plan-panel .plan-file {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .plan-panel .plan-file:last-child { border-bottom: none; }
+  .plan-panel .plan-file .pf-path {
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--accent-2); font-weight: 600;
+  }
+  .plan-panel .plan-file .pf-desc {
+    font-size: 0.75rem; color: var(--muted); margin-top: 2px; line-height: 1.4;
+  }
+  .plan-panel .plan-file .pf-run {
+    font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted-dim); margin-top: 3px;
+  }
+
   .step.pending { opacity: 0.4; }
   .step.pending .icon { color: var(--muted); }
   .step.running { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-dim), var(--panel) 60%); }
@@ -573,6 +610,11 @@
     color: var(--muted);
   }
   .drawer-account .sync-hint { color: var(--muted-dim); font-size: 0.68rem; margin-top: 4px; line-height: 1.4; }
+  .drawer-account.pulse-focus { animation: accountPulse 0.8s ease-in-out 2; }
+  @keyframes accountPulse {
+    0%, 100% { background: transparent; }
+    50% { background: var(--accent-dim); }
+  }
   .google-btn {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%; margin-top: 10px;
@@ -797,15 +839,12 @@
   // ⚠️ YAHA APNA FIREBASE PROJECT CONFIG DAALO — Firebase console >
   // Project settings > General > Your apps > SDK setup and configuration.
   const FIREBASE_CONFIG = {
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  apiKey: "AIzaSyCc28Tb2jnI5CJ4A7NGx4nSy8mqXyCN73w",
-  authDomain: "agentic-bot-32c6a.firebaseapp.com",
-  projectId: "agentic-bot-32c6a",
-  storageBucket: "agentic-bot-32c6a.firebasestorage.app",
-  messagingSenderId: "316654493890",
-  appId: "1:316654493890:web:d05e952bc56953dcd95b5b",
-  measurementId: "G-8MNR49WYQV"
-
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
   };
 
   let firebaseReady = false;
@@ -852,6 +891,7 @@
   const historyDrawer = document.getElementById('historyDrawer');
   const drawerCloseBtn = document.getElementById('drawerCloseBtn');
   const drawerAccountBody = document.getElementById('drawerAccountBody');
+  const drawerAccountEl = document.getElementById('drawerAccount');
   const drawerList = document.getElementById('drawerList');
 
   // Live overlay elements
@@ -965,6 +1005,9 @@
     return `${m}m ${s % 60}s`;
   }
 
+  let planData = null; // Planner ka poora file-list plan (path/description/runnable/runCmd)
+  let planPanelOpen = false;
+
   function resetTracker() {
     steps = [
       { id: 'planner', label: 'Planner', sub: 'Scoping files…', status: 'pending' },
@@ -977,6 +1020,8 @@
     liveBuffers = {};
     liveOpenFile = null;
     autoOpenedOnce = false;
+    planData = null;
+    planPanelOpen = false;
     renderTracker();
     if (timerHandle) clearInterval(timerHandle);
     timerHandle = setInterval(tick, STUCK_CHECK_INTERVAL_MS);
@@ -1068,6 +1113,24 @@
             ? `<div class="live-tap" data-file="${escapeHtml(s.label)}" style="animation:none; opacity:0.7;">↺ replay build</div>`
             : '');
 
+      // Planner step pe, plan mil chuka ho to "view plan" tap + expandable panel
+      let planTapHtml = '';
+      let planPanelHtml = '';
+      if (s.id === 'planner' && planData && planData.length > 0) {
+        planTapHtml = `<div class="plan-tap" id="planTapBtn">${planPanelOpen ? '▾ hide plan' : '▸ view plan'} (${planData.length} file${planData.length > 1 ? 's' : ''})</div>`;
+        planPanelHtml = `
+          <div class="plan-panel ${planPanelOpen ? 'open' : ''}" id="planPanel">
+            ${planData.map(f => `
+              <div class="plan-file">
+                <div class="pf-path">${escapeHtml(f.path)}</div>
+                <div class="pf-desc">${escapeHtml(f.description || '(no description)')}</div>
+                ${f.runnable ? `<div class="pf-run">▶ runnable${f.runCmd ? ' — ' + escapeHtml(f.runCmd) : ''}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
       return `
         <div class="${cls.join(' ')}" ${s.isFile ? `data-file-step="${escapeHtml(s.label)}"` : ''}>
           <div class="icon">${iconFor(s.status)}</div>
@@ -1075,6 +1138,8 @@
             <div class="label"><span class="name">${escapeHtml(s.label)}</span>${elapsedSpan}</div>
             <div class="sub">${escapeHtml(subText)}</div>
             ${liveTapHtml}
+            ${planTapHtml}
+            ${planPanelHtml}
           </div>
         </div>
       `;
@@ -1087,6 +1152,16 @@
         openLiveOverlay(el.dataset.file);
       });
     });
+
+    // tap listener for "view plan"
+    const planTapBtn = document.getElementById('planTapBtn');
+    if (planTapBtn) {
+      planTapBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        planPanelOpen = !planPanelOpen;
+        renderTracker();
+      });
+    }
   }
 
   function escapeHtml(str) {
@@ -1134,7 +1209,8 @@
         if (ev.ok === false) {
           setStep('planner', { status: 'failed', sub: ev.error || 'Plan parse nahi hua' });
         } else {
-          setStep('planner', { status: 'done', sub: `${ev.files.length} file(s) planned` });
+          planData = ev.plan || null;
+          setStep('planner', { status: 'done', sub: `${ev.files.length} file(s) planned — tap to see the plan` });
           insertFileSteps(ev.files);
         }
         break;
@@ -1360,38 +1436,51 @@
   // ============================================================
   function buildPreviewDoc(files) {
     const byName = {};
-    files.forEach(f => { byName[f.path.split('/').pop()] = f.code; });
+    files.forEach(f => { byName[f.path.split('/').pop().toLowerCase()] = f.code; });
 
     const htmlFile = files.find(f => /\.html?$/i.test(f.path));
     if (!htmlFile) return null;
 
-    let doc = htmlFile.code;
+    // DOMParser se actual DOM banate hain — regex se zyada robust hai,
+    // chahe attributes kisi bhi order me ho ya extra attributes (defer,
+    // type="text/javascript" etc) ho, sab handle ho jaata hai.
+    const parser = new DOMParser();
+    const parsedDoc = parser.parseFromString(htmlFile.code, 'text/html');
+
+    // Mobile par sahi alignment ke liye viewport meta zaroori hai — agar
+    // planner-generated HTML me missing hai, force-inject karo.
+    if (!parsedDoc.querySelector('meta[name="viewport"]')) {
+      const viewportMeta = parsedDoc.createElement('meta');
+      viewportMeta.setAttribute('name', 'viewport');
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0');
+      if (parsedDoc.head) parsedDoc.head.insertBefore(viewportMeta, parsedDoc.head.firstChild);
+    }
 
     // Saare <link rel="stylesheet" href="X.css"> ko inline <style> se replace karo
-    doc = doc.replace(/<link[^>]+href=["']([^"']+\.css)["'][^>]*>/gi, (match, href) => {
-      const fname = href.split('/').pop();
+    parsedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+      const href = link.getAttribute('href') || '';
+      const fname = href.split('/').pop().toLowerCase();
       if (byName[fname] !== undefined) {
-        return `<style>\n${byName[fname]}\n</style>`;
+        const styleTag = parsedDoc.createElement('style');
+        styleTag.textContent = byName[fname];
+        link.replaceWith(styleTag);
       }
-      return match; // external CSS (jaise CDN) — chhod do
+      // external CSS (CDN links) waise hi rehne do
     });
 
-    // Saare <script src="X.js"> tags ko inline <script> se replace karo.
-    // NOTE: regex aur replacement dono me literal closing-script-tag text
-    // nahi likhte (string jodke banate hain), warna browser ka HTML parser
-    // ise is outer <script> block ka असली closing tag samajh ke yahin
-    // terminate kar dega — silent breakage, bahut confusing bug.
-    const SCRIPT_CLOSE = '</' + 'script>';
-    const scriptOpenCloseRe = new RegExp('<script[^>]+src=["\']([^"\']+\\.js)["\'][^>]*>\\s*' + SCRIPT_CLOSE, 'gi');
-    doc = doc.replace(scriptOpenCloseRe, (match, src) => {
-      const fname = src.split('/').pop();
+    // Saare <script src="X.js"> ko inline <script> se replace karo
+    parsedDoc.querySelectorAll('script[src]').forEach(script => {
+      const src = script.getAttribute('src') || '';
+      const fname = src.split('/').pop().toLowerCase();
       if (byName[fname] !== undefined) {
-        return '<script>\n' + byName[fname] + '\n' + SCRIPT_CLOSE;
+        const inlineScript = parsedDoc.createElement('script');
+        inlineScript.textContent = byName[fname];
+        script.replaceWith(inlineScript);
       }
-      return match; // external JS (CDN) — chhod do
+      // external JS (CDN scripts) waise hi rehne do
     });
 
-    return doc;
+    return '<!DOCTYPE html>\n' + parsedDoc.documentElement.outerHTML;
   }
 
   let currentPreviewFiles = null;
@@ -1406,7 +1495,13 @@
     }
     const htmlFile = files.find(f => /\.html?$/i.test(f.path));
     previewInfo.textContent = htmlFile.path;
-    previewArea.innerHTML = `<div class="preview-frame-wrap"><iframe id="previewIframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${escapeHtml(doc)}"></iframe></div>`;
+    previewArea.innerHTML = `<div class="preview-frame-wrap"><iframe id="previewIframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" title="Live preview"></iframe></div>`;
+    // srcdoc ko attribute-string se set karne ke bajaye JS property se set
+    // karte hain — isse HTML-entity double-escaping ka risk nahi rehta
+    // (jaise agar code me pehle se &amp; ho, ya quotes ho), aur bade
+    // documents (long code) ke saath bhi reliable rehta hai.
+    const iframe = document.getElementById('previewIframe');
+    iframe.srcdoc = doc;
   }
 
   previewRefreshBtn.addEventListener('click', () => {
@@ -1626,17 +1721,25 @@
   }
 
   // ---------- Drawer open/close ----------
-  function openDrawer() {
+  function openDrawer(focusAccount) {
     historyDrawer.classList.add('show');
     drawerOverlay.classList.add('show');
     if (firebaseReady && currentUser) loadHistory();
+    if (focusAccount) {
+      // Guest/account icon se khula hai — account section (jahan
+      // "Sign in with Google" button hai) ko highlight karke dikhao,
+      // taaki confuse na ho ki ye history list hai ya login.
+      drawerAccountEl.classList.add('pulse-focus');
+      setTimeout(() => drawerAccountEl.classList.remove('pulse-focus'), 1600);
+      drawerAccountEl.scrollIntoView({ block: 'start' });
+    }
   }
   function closeDrawer() {
     historyDrawer.classList.remove('show');
     drawerOverlay.classList.remove('show');
   }
-  historyBtn.addEventListener('click', openDrawer);
-  accountBtn.addEventListener('click', openDrawer);
+  historyBtn.addEventListener('click', () => openDrawer(false));
+  accountBtn.addEventListener('click', () => openDrawer(true));
   drawerCloseBtn.addEventListener('click', closeDrawer);
   drawerOverlay.addEventListener('click', closeDrawer);
 </script>
