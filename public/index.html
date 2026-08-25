@@ -480,6 +480,10 @@
     }
   }
 
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   sendBtn.addEventListener('click', async () => {
     const task = document.getElementById('task').value.trim();
     if (!task) return;
@@ -493,51 +497,49 @@
     resetTracker();
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/project/stream`, {
+      // Step 1: job start karo — turant jobId milega, pipeline background mein chalti hai
+      const startRes = await fetch(`${BACKEND_URL}/api/project/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task })
       });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.error || `Server error (${startRes.status})`);
 
-      if (!res.ok || !res.body) {
-        // stream endpoint khud fail hua (missing key waghera) — normal JSON error hoga
-        let data = {};
-        try { data = await res.json(); } catch (e) {}
-        throw new Error(data.error || `Server error (${res.status})`);
-      }
+      const jobId = startData.jobId;
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // Step 2: har 2s me job status poll karo, jab tak done/error na ho jaaye
+      let seenEventCount = 0;
       let finalData = null;
-      let streamError = null;
+      let jobError = null;
 
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        await sleep(2000);
 
-        // SSE frames \n\n se separate hote hain
-        let sepIdx;
-        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
-          const frame = buffer.slice(0, sepIdx);
-          buffer = buffer.slice(sepIdx + 2);
-          const dataLine = frame.split('\n').find(l => l.startsWith('data: '));
-          if (!dataLine) continue; // ping/comment frame, ignore
-
-          const payload = JSON.parse(dataLine.slice(6));
-          if (payload.kind === 'progress') {
-            handleProgressEvent(payload);
-          } else if (payload.kind === 'result') {
-            finalData = payload;
-          } else if (payload.kind === 'error') {
-            streamError = payload.error;
-          }
+        const statusRes = await fetch(`${BACKEND_URL}/api/project/status/${jobId}?since=${seenEventCount}`);
+        if (!statusRes.ok) {
+          const errData = await statusRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Status check fail (${statusRes.status})`);
         }
+        const statusData = await statusRes.json();
+
+        // naye events tracker me apply karo
+        statusData.events.forEach(handleProgressEvent);
+        seenEventCount = statusData.eventCount;
+
+        if (statusData.status === 'done') {
+          finalData = statusData.result;
+          break;
+        }
+        if (statusData.status === 'error') {
+          jobError = statusData.error;
+          break;
+        }
+        // status "running" hai to loop jaari rakho
       }
 
-      if (streamError) throw new Error(streamError);
-      if (!finalData) throw new Error('Server se result nahi mila (connection beech mein toot gaya ho sakta hai)');
+      if (jobError) throw new Error(jobError);
+      if (!finalData) throw new Error('Server se result nahi mila');
 
       const data = finalData;
       badge.textContent = data.success ? '✅ SUCCESS' : '⚠️ KUCH FILES FAILED';
